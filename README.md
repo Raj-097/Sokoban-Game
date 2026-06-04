@@ -7,7 +7,9 @@ This project is an implementation of the classic Sokoban puzzle game using the J
 The objective of the game is to push boxes onto their target locations while navigating around obstacles. 
 Since boxes can only be pushed and never pulled, players must think carefully before every move to avoid deadlock situations. 
 
-The game includes multiple levels with increasing difficulty, requiring more planning and strategy as level progresses.
+The game includes three levels with increasing difficulty, requiring more planning and strategy as level progresses.
+
+The code design makes the codebase maintainable and easy to extend with additional levels and features.
 
 ---
 
@@ -115,6 +117,7 @@ Displays Main Menu, level selection menu, help section, HUD information, and all
 * Clear UI messages, main menu, level selection menu, help section, and HUD.
 * Ability to start from unlocked levels anytime.
 * Program terminates only when user confirms exit option from the Main Menu.
+* The design makes it straightforward to add new levels and extend game functionality in future.
 
 ---
 

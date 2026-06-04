@@ -1,0 +1,274 @@
+// Project: Sokoban
+// File: UI.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Handles all user interface rendering including Main Menu, help section,
+ * level selection menu (with "locked" text if a level is yet to be reached), HUD, and game messages.
+ * Provides centered and left-aligned text utilities for consistent UI layout.
+ * Writes static HUD values (labels and level-based records) and dynamic values (current move count) 
+ * seperately to avoid re-writing labels and values that do not change within a level.
+ */
+class UI {
+
+    // Center column and row of the hack screen
+    field int centerCol;
+    field int centerRow;
+
+    // Static labels for dynamic and static information
+    field String movesLabel;  // label for current move count
+    field String bestLabel;  // label for best move count record of the level
+    field String levelLabel;  // label for current level number
+    field String restartLabel;  // label for restart key
+    field String quitLabel;  // label for quit key
+
+    /**
+     * Initializes static labels and center positions according to the screen.
+     */
+    constructor UI new() {
+        let centerCol = 32;
+        let centerRow = 11;
+
+        let movesLabel = "Moves:";  
+        let bestLabel = "Best:";
+        let levelLabel = "Level:";
+        let restartLabel = "R -> Restart";
+        let quitLabel = "Q -> Quit";
+
+        return this;
+    }
+
+    /**
+     * Prints given string centered on given row.
+     */
+    method void printCentered(int row, String s) {
+        var int len;
+        var int col;
+
+        let len = s.length();
+        let col = centerCol - (len / 2);
+
+        do Output.moveCursor(row, col);
+        do Output.printString(s);
+
+        return;
+    }
+
+    /**
+     * Prints given string at starting from given row and column (left-aligned).
+     */
+    method void printLeftAligned(int row, int col, String s) {
+        do Output.moveCursor(row, col);
+        do Output.printString(s);
+
+        return;
+    }
+
+    /**
+     * Displays main menu: game title, options to start game from level 1, 
+     * choose a specific level, access help, and exit the game.
+     */
+    method void showMainMenu() {
+        do Screen.clearScreen();
+
+        // Centered title and options
+        do printCentered(centerRow - 5, "SOKOBAN");
+        do printCentered(centerRow - 1, "Press Enter to start");
+        do printCentered(centerRow + 1, "Press L to select level");
+        do printCentered(centerRow + 3, "Press H for help");
+        do printCentered(centerRow + 5, "Press ESC to exit");
+
+        return;
+    }
+
+    /**
+     * Displays Level numbers to choose from, if it is unlocked
+     * After a level is completed the next level is set to unlocked status in the lock status array
+     * whose reference this method receives and checks the lock status of each level to print indicate 
+     * if a level is currently unlocked or locked.  
+     */
+    method void showLevels(Array isLocked) {
+        do Screen.clearScreen();
+
+        do printCentered(centerRow - 5, "Press the level number to choose the level");
+        
+        do printLeftAligned(centerRow - 2, 24, "Level 1");
+        
+        if(isLocked[2]) { 
+            do printLeftAligned(centerRow, 24, "Level 2  (Locked)");
+        }
+        else {
+            do printLeftAligned(centerRow, 24, "Level 2");
+        }
+
+        if(isLocked[3]) { 
+            do printLeftAligned(centerRow + 2, 24, "Level 3  (Locked)");
+        }
+        else {
+            do printLeftAligned(centerRow + 2, 24, "Level 3");
+        }
+
+        do printCentered(centerRow + 6, "Press ESC to return to Main Menu");
+
+        return;
+    }
+
+    /**
+     * Displays help screen with goal, controls, and game elements (visual legend).
+     */
+    method void showHelpScreen() {
+        do Screen.clearScreen();
+
+        // Left-aligned help instructions
+        do printLeftAligned(2, 12, "SOKOBAN HELP");
+        
+        do printLeftAligned(4, 12, "OBJECTIVE");
+        do printLeftAligned(5, 12, "Push all boxes onto targets");
+        
+        do printLeftAligned(7, 12, "CONTROLS");
+        do printLeftAligned(8, 12, "Arrow Keys / WASD");
+        do printLeftAligned(8, 32, "- Move");
+
+        do printLeftAligned(9, 12, "R");
+        do printLeftAligned(9, 32, "- Restart Level");
+
+        do printLeftAligned(10, 12, "Q");
+        do printLeftAligned(10, 32, "- Quit to Menu");
+
+        do printLeftAligned(12, 12, "GAME ELEMENTS");
+
+        do printLeftAligned(13, 12, "Player");
+        do printLeftAligned(13, 32, "- Filled Circle");
+
+        do printLeftAligned(14, 12, "Wall");
+        do printLeftAligned(14, 32, "- Bricked Square");
+
+        do printLeftAligned(15, 12, "Box");
+        do printLeftAligned(15, 32, "- Filled Square");
+
+        do printLeftAligned(16, 12, "Target");
+        do printLeftAligned(16, 32, "- Hollow Square");
+
+        do printLeftAligned(17, 12, "Box on Target");
+        do printLeftAligned(17, 32, "- Partially Filled Square");
+        
+        do printCentered(20, "Press Enter or ESC to return to Main Menu");
+
+        return;
+    }
+
+    /**
+     * Draws static labels and static HUD values that do not change within a level.
+     */
+    method void drawStaticHUD(int bestCount, int level) {
+        // Bottom left of the board
+        do Output.moveCursor(21, 19);
+        do Output.printString(movesLabel);
+
+        do Output.moveCursor(22, 19);
+        do Output.printString(bestLabel);
+
+        // Bottom right of the board
+        do Output.moveCursor(21, 37);
+        do Output.printString(levelLabel);
+
+        // Top right corner for restart and quit labels
+        do Output.moveCursor(1, 50);
+        do Output.printString(restartLabel);
+
+        do Output.moveCursor(2, 50);
+        do Output.printString(quitLabel);
+
+        // Print best move count of the level
+        do Output.moveCursor(22, 26);
+        do Output.printInt(bestCount);
+
+        // Print current level number
+        do Output.moveCursor(21, 44);
+        do Output.printInt(level);
+
+        return;
+    }
+
+    /**
+     * Draws dynamic HUD value (current move count) that changes at every move.
+     */
+    method void drawDynamicHUD(int moveCount) {
+        // Print current number of moves
+        do Output.moveCursor(21, 26);
+        do Output.printInt(moveCount);
+
+        return;
+    }
+
+    /**
+     * Displays quit confirmation screen.
+     */
+    method void showQuitConfirmation() {
+        do Screen.clearScreen();
+
+        // Centered quit confirmation message
+        do printCentered(centerRow - 1, "Quit? Your current progress will be lost.");
+        do printCentered(centerRow + 1, "Press Y to quit, N to continue");
+
+        return;
+    }
+
+    /**
+     * Displays level completion screen with current level number.
+     */
+    method void showLevelComplete(int levelNum) {
+        do Screen.clearScreen();
+
+        do printLeftAligned(centerRow - 1, 19, "*** Level");
+        do Output.moveCursor(centerRow - 1, 29); 
+        do Output.printInt(levelNum);
+        do printLeftAligned(centerRow - 1, 31, "Completed! ***"); 
+        
+        do printCentered(centerRow + 2, "Press Enter to continue");
+
+        return;
+    }
+
+    /**
+     * Displays victory screen after completing all levels.
+     */
+    method void showVictoryScreen() {
+        do Screen.clearScreen();
+
+        // Centered victory message
+        do printCentered(centerRow - 3, "***** YOU WIN! *****");
+        do printCentered(centerRow - 1, "You Have Completed All Levels!");
+        do printCentered(centerRow + 1, "You can start from any level to beat your best scores");
+        do printCentered(centerRow + 2, "or exit from main menu");
+
+        do printCentered(centerRow + 5, "Press Enter to continue");
+
+        return;
+    }
+
+    /**
+     * Displays final termination screen.
+     */
+    method void showTerminateScreen() {
+        do Screen.clearScreen();
+
+        // Centered program termination message
+        do printCentered(centerRow, "Program Terminated");
+
+        return;
+    }
+
+    /**
+     * Displays program termination confirmation screen.
+     */
+    method void showProgramExitConfirmation() {
+        do Screen.clearScreen();
+
+        // Centered program exit confirmation message
+        do printCentered(centerRow - 1, "Close Game? All progress will be lost.");
+        do printCentered(centerRow + 1, "Press Y to close, N to cancel");
+
+        return;
+    }
+}

@@ -1,0 +1,60 @@
+// Project: Sokoban
+// File: Player.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Stores the player's position in the game world. (x and y tile coordinates)
+ * Used to get and set current position of player.
+ */
+class Player {
+
+    // Tile coordinates of the player
+    // (0,0) is the top-left corner of the board and x increases to the right, y increases downwards
+    field int x;
+    field int y;
+
+    /**
+     * Initializes player position to (0,0) tile coordinates.
+     */
+    constructor Player new() {
+        let x = 0;
+        let y = 0;
+        
+        return this;
+    }
+
+    /**
+     * Sets player position to given (x,y) tile coordinates.
+     */
+    method void setPosition(int newX, int newY) {
+        let x = newX;
+        let y = newY;
+        
+        return;
+    }
+
+    /**
+     * Moves player by a delta amount (dx, dy) in tile coordinates.
+     * Used for updating player position during movement.
+     */
+    method void move(int dx, int dy) {
+        let x = x + dx;
+        let y = y + dy;
+        
+        return;
+    }
+
+    /**
+     * Returns X tile coordinate of player.
+     */
+    method int getX() {
+        return x;
+    }
+
+    /**
+     * Returns Y tile coordinate of player.
+     */
+    method int getY() {
+        return y;
+    }
+}

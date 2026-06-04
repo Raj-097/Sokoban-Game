@@ -1,0 +1,29 @@
+// Project: Sokoban
+// File: Input.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Input handling utility for the game.
+ * Provides keyboard polling and a safe key-release wait mechanism
+ * to avoid repeated input triggers during gameplay.
+ */
+class Input {
+
+    /** 
+     * Returns the currently pressed key code from the keyboard. 
+     */
+    function int getKey() {
+        return Keyboard.keyPressed();
+    }
+
+    /**
+     * Blocks until all keys are released.
+     * Used to prevent key-repeat issues in movement and menu navigation.
+     */
+    function void waitForKeyRelease() {
+        while (~(Keyboard.keyPressed() = 0)) {
+            do Sys.wait(5);  // delay before next check
+        }
+        return;
+    }
+}

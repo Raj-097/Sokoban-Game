@@ -1,0 +1,491 @@
+// Project: Sokoban
+// File: Level.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Contains and maintains state of every game level as game progresses.
+ * State quantities include initial and current tile information for the game board,
+ * best move counts for each level, lock status of each level, width & height of game board, etc.
+ * Uses arrays to store state data which increase in number as number of levels increases, 
+ * facilitating level additions in future.
+ * Updates and provides tile data when needed for computatins and rendering.
+ * Stores the 2D game board with its objects encoded in 1D integer array.
+ */
+class Level {
+
+    // current tile states for the level (0=empty, 1=wall, 2=box, 3=target, 4=box on target)
+    field Array tiles;  
+    // Base layout of the level (used for recovering target positions which may be replaced in tiles array)
+    field Array baseTiles;  
+    // Level dimensions in terms on number of tiles
+    field int width;
+    field int height;
+    
+    // Starting position of the player for the level (used for resetting and initial spawn)
+    field int playerStartX;
+    field int playerStartY;
+
+    // Total number of levels in the game
+    field int numberOfLevels;
+
+    // Array to track best move counts for each level, used to display records in the HUD and encourage replayability
+    // Index 1 represents level 1 and so on
+    field Array bestCounts;
+
+    // Array to track lock status of each level. Complete previous levels to unlock a level.
+    // isLevelLocked[2] = true -> level 2 is locked
+    field Array isLevelLocked;  
+
+    /**
+     * Initializes level data structures and default configuration.
+     * Allocates memory for tile grids and sets field values.
+     */
+    constructor Level new() {
+        var int i;  // variable used to traverse arrays holding level informations
+
+        let width = 14;
+        let height = 14;
+
+        // Allocate memory for tile arrays using Array class
+        let tiles = Array.new(width * height);
+        let baseTiles = Array.new(width * height);
+
+        let playerStartX = 0;
+        let playerStartY = 0;
+
+        let numberOfLevels = 3;
+
+        // Allocate memory for arrays containing best move count records and level lock status
+        let bestCounts = Array.new(numberOfLevels + 1);
+        let isLevelLocked = Array.new(numberOfLevels + 1);
+        
+        // Initialize bestCount entries to a high number as default (lower the better in sokoban)
+        // Lock all levels except 1st one at game start -> Finish previous levels to unlock a level
+        let i = 0;
+        while(~(i > numberOfLevels)) {
+            let bestCounts[i] = 999;
+            let isLevelLocked[i] = true;
+            let i = i + 1;
+        } 
+        let isLevelLocked[0] = false;
+        let isLevelLocked[1] = false;
+
+        return this;
+    }
+
+    /**
+     * Loads a specific layout into the tile grid according to the current level.
+     * Resets board and populates walls, boxes, targets, and player spawn.
+     */
+    method void loadLevel(int levelNum) {
+        var int x;
+        var int y;
+
+        // Clear board
+        let y = 0;
+
+        while (y < height) {
+            let x = 0;
+
+            while (x < width) {
+                do setTile(x, y, 0);
+                do setBaseTile(x, y, 0);
+
+                let x = x + 1;
+            }
+
+            let y = y + 1;
+        }
+
+        // LEVEL 1
+        if (levelNum = 1) {
+
+            let x = 0;
+            while (x < width) {
+                do setTile(x, 0, 1);
+                do setTile(x, height - 1, 1);
+                let x = x + 1;
+            }
+
+            let y = 0;
+            while (y < height) {
+                do setTile(0, y, 1);
+                do setTile(width - 1, y, 1);
+                let y = y + 1;
+            }
+
+            // More walls
+            do setTile(3,2,1);
+            do setTile(3,3,1);
+            do setTile(3,4,1);
+            do setTile(3,5,1);
+            do setTile(3,6,1);
+            do setTile(4,5,1);
+            do setTile(4,6,1);
+
+            do setTile(6,6,1);
+            do setTile(7,6,1);
+            do setTile(8,6,1);
+            do setTile(8,5,1);
+            do setTile(8,4,1);
+            do setTile(8,3,1);
+
+            do setTile(10,8,1);
+            do setTile(10,9,1);
+            do setTile(10,10,1);
+            do setTile(10,11,1);
+
+            // Initial box positions 
+            do setTile(2,2,2);
+            do setTile(5,8,2);
+            do setTile(11,11,2);
+
+            // Target positions
+            do setTile(10,2,3);
+            do setBaseTile(10,2,3);
+            do setTile(2,10,3);
+            do setBaseTile(2,10,3);
+            do setTile(9,9,3);
+            do setBaseTile(9,9,3);
+
+            // Initial player position
+            let playerStartX = 6;
+            let playerStartY = 7;
+        }
+
+        // LEVEL 2
+        if (levelNum = 2) {
+
+            // Walls
+            let x = 0;
+            while (x < width) {
+                do setTile(x, 0, 1);
+                do setTile(x, 1, 1);
+                do setTile(x, height - 1, 1);
+                do setTile(x, height - 2, 1);
+                do setTile(x, height - 3, 1);
+                let x = x + 1;
+            }
+
+            let y = 0;
+            while (y < height) {
+                do setTile(0, y, 1);
+                do setTile(1, y, 1);
+                do setTile(2, y, 1);
+                do setTile(width - 1, y, 1);
+                do setTile(width - 2, y, 1);
+                do setTile(width - 3, y, 1);
+                let y = y + 1;
+            }
+
+            // More walls
+            do setTile(3,2,1);
+            do setTile(3,3,1);
+            do setTile(3,4,1);
+            do setTile(3,5,1);
+            do setTile(4,2,1);
+            do setTile(4,3,1);
+            do setTile(4,4,1);
+            do setTile(4,5,1);
+
+            do setTile(5,2,1);
+            do setTile(6,2,1);
+            do setTile(7,2,1);
+
+            do setTile(10,2,1);
+            do setTile(10,7,1);
+            do setTile(10,8,1);
+            do setTile(10,9,1);
+            do setTile(10,10,1);
+
+            do setTile(5,10,1);
+            do setTile(6,10,1);
+            do setTile(7,10,1);
+            do setTile(8,10,1);
+            do setTile(9,10,1);
+
+            do setTile(6,4,1);
+            do setTile(6,5,1);
+            do setTile(6,6,1);
+            do setTile(6,7,1);
+            do setTile(7,7,1);
+
+            // Initial box positions
+            do setTile(6,3,2);
+            do setTile(3,8,2);
+            do setTile(5,9,2);
+            do setTile(8,6,2);
+            do setTile(8,4,2);
+
+            // Target positions
+            do setTile(10,4,3);
+            do setBaseTile(10,4,3);
+            do setTile(10,6,3);
+            do setBaseTile(10,6,3);
+            do setTile(7,5,3);
+            do setBaseTile(7,5,3);
+            do setTile(5,5,3);
+            do setBaseTile(5,5,3);
+            do setTile(3,7,3);
+            do setBaseTile(3,7,3);
+
+            // Initial player position
+            let playerStartX = 10;
+            let playerStartY = 5;
+        }
+
+        // LEVEL 3
+        if (levelNum = 3) {
+
+            // Walls
+            let x = 0;
+            while (x < width) {
+                do setTile(x, 0, 1);
+                do setTile(x, 1, 1);
+                do setTile(x, 2, 1);
+                do setTile(x, height - 1, 1);
+                do setTile(x, height - 2, 1);
+                do setTile(x, height - 3, 1);
+                do setTile(x, height - 4, 1);
+                let x = x + 1;
+            }
+
+            let y = 0;
+            while (y < height) {
+                do setTile(0, y, 1);
+                do setTile(1, y, 1);
+                do setTile(width - 1, y, 1);
+                do setTile(width - 2, y, 1);
+                do setTile(width - 3, y, 1);
+                let y = y + 1;
+            }
+
+            // More walls
+            do setTile(2,3,1);
+            do setTile(2,4,1);
+            do setTile(3,3,1);
+            do setTile(3,4,1);
+            do setTile(4,3,1);
+            do setTile(4,4,1);
+
+            do setTile(8,3,1);
+            do setTile(8,4,1);
+
+            do setTile(9,3,1);
+            do setTile(10,3,1);
+
+            do setTile(10,7,1);
+            do setTile(9,7,1);
+
+            do setTile(3,6,1);
+            do setTile(3,7,1);
+            do setTile(3,8,1);
+
+            do setTile(7,6,1);
+            do setTile(7,7,1);
+            do setTile(7,8,1);
+
+            do setTile(4,8,1);
+            do setTile(5,8,1);
+            do setTile(6,8,1);
+
+            // Initial box positions
+            do setTile(9,5,2);
+            do setTile(8,5,2);
+            do setTile(7,4,2);
+            do setTile(4,6,2);
+            do setTile(6,6,2);
+
+            // Target positions
+            do setTile(3,9,3);
+            do setBaseTile(3,9,3);
+            do setTile(5,9,3);
+            do setBaseTile(5,9,3);
+            do setTile(7,9,3);
+            do setBaseTile(7,9,3);
+            do setTile(5,3,3);
+            do setBaseTile(5,3,3);
+            do setTile(2,5,3);
+            do setBaseTile(2,5,3);
+
+            // Initial player position
+            let playerStartX = 10;
+            let playerStartY = 6;
+        }
+
+        return;
+    }
+
+    /**
+     * Moves a box from one cell to another and updates tile states.
+     * Handles interaction with target tiles correctly.
+     */
+    method void moveBox(int fromX, int fromY, int toX, int toY) {
+        // Base tile values at source and destination
+        var int destinationBaseTile;
+        var int sourceBaseTile;
+
+        let destinationBaseTile = getBaseTile(toX, toY);
+        let sourceBaseTile = getBaseTile(fromX, fromY);
+
+        // If source base tile is a target, change source tile to target (3). 
+        // Else, change it to empty (0).
+        if (sourceBaseTile = 3) {
+            do setTile(fromX, fromY, 3);
+        } 
+        else {
+            do setTile(fromX, fromY, 0);
+        }
+        
+        // If destination tile is a target, change destination tile as box-on-target (4). 
+        // Else, change it to regular box (2).
+        if (destinationBaseTile = 3) {
+            do setTile(toX, toY, 4);
+        } 
+        else {
+            do setTile(toX, toY, 2);
+        }
+
+        return;
+    }
+
+    /**
+     * Returns current tile value at given position.
+     */
+    method int getTile(int x, int y) {
+        return tiles[(y * width) + x];
+    }
+
+    /**
+     * Sets current tile value at given position.
+     */
+    method void setTile(int x, int y, int value) {
+        let tiles[(y * width) + x] = value;
+        return;
+    }
+
+    /**
+     * Returns base tile value at given position.
+     */
+    method int getBaseTile(int x, int y) {
+        return baseTiles[(y * width) + x];
+    }
+
+    /**
+     * Sets base tile value at given position.
+     */
+    method void setBaseTile(int x, int y, int value) {
+        let baseTiles[(y * width) + x] = value;
+        return;
+    }
+
+    /**
+     * Returns player start X coordinate.
+     */
+    method int getPlayerStartX() {
+        return playerStartX;
+    }
+
+    /**
+     * Returns player start Y coordinate.
+     */
+    method int getPlayerStartY() {
+        return playerStartY;
+    }
+
+    /**
+     * Returns number of levels in the game.
+     */
+    method int getNumberOfLevels() {
+        return numberOfLevels;
+    }
+
+    /**
+     * Returns width of game board.
+     */
+    method int getWidth() {
+        return width;
+    }
+
+    /**
+     * Returns height of game board.
+     */
+    method int getHeight() {
+        return height;
+    }
+
+    /**
+     * Helper to find the best move count for the current level.
+     * Used to display correct level records in the HUD.
+     */
+    method int getBestForLevel(int levelNum) {
+        return bestCounts[levelNum];
+    }
+
+    /**
+     * Helper to set the best move count for the current level.
+     * Used to update level records when a new best move count is achieved.
+     */
+    method void setBestForLevel(int levelNum, int moveCount) {
+        let bestCounts[levelNum] = moveCount;
+
+        return;
+    }
+
+    /**
+     * Helper to check the lock status of the current level.
+     * Used to check if a level can be selected to play directly from. (True -> Locked & False -> Unlocked)
+     */
+    method boolean getLockStatusForLevel(int levelNum) {
+        return isLevelLocked[levelNum];
+    }
+
+    /**
+     * Helper to update the lock status of the current level.
+     * After completing previous levels, the level's lock status is updated to false. 
+     */
+    method void updateLockStatusForLevel(int levelNum) {
+        let isLevelLocked[levelNum] = false;
+
+        return;
+    }
+
+    /**
+     * Returns the entire level lock status array
+     * Used in rendering the level selction UI
+     */
+    method Array getLockStatusArr() {
+        return isLevelLocked;
+    }
+
+    /**
+     * Checks whether current level is completed.
+     * Returns true when no target tiles remain uncovered.
+     */
+    method boolean isCompleted() {
+        var int x;
+        var int y;
+        var int tile;
+
+        // Traverse each tile of the game board and check if any uncovered target tile (3) remains
+        let y = 0;
+
+        while (y < height) {
+            let x = 0;
+
+            while (x < width) {
+                let tile = getTile(x, y);
+
+                if (tile = 3) {
+                    return false;
+                }
+
+                let x = x + 1;
+            }
+
+            let y = y + 1;
+        }
+
+        return true;
+    }
+}

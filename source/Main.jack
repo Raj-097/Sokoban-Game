@@ -1,0 +1,23 @@
+// Project: Sokoban
+// File: Main.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Entry point of the Sokoban game program.
+ * Responsible for creating the Game instance and starting execution.
+ */
+class Main {
+
+    /**
+     * Creates the game object and starts the main game loop.
+     * Program execution continues inside Game.run() until the game exits.
+     */
+    function void main() {
+        var Game game;
+
+        let game = Game.new();
+        do game.run();
+
+        return;
+    }
+}

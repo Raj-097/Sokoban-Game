@@ -1,0 +1,637 @@
+// Project: Sokoban
+// File: Game.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Implements and Controls overall Sokoban game flow and state management.
+ * Handles input, player and box movements, level progressions, UI, and game screens.
+ * Maintains coordinations between references to all major game components: Level, Player, Renderer, and UI, 
+ * to ensure the game state is updated and rendered correctly with seamless UI experience.
+ * Coordinates efficient screen updates to avoid full redraws when not needed, avoiding flickering at every move. 
+ * After completing all levels, players are allowed to start over and beat their best scores or exit game.
+ * Players are also facilitated to select a particular level to start from once previous levels are completed.
+ */
+class Game {
+
+    field Level level;  // level object maintains the game board state for specific levels
+    field Player player;  // player object maintains the player's position
+    field Renderer renderer;  // renderer object handles all drawing of the game board and its objects
+    field UI ui;  // ui object handles all user interface rendering including menus, HUD, and messages
+
+    field int moveCount;  // number of moves taken in the current level, used for scoring in Sokoban
+    field int currentLevel;
+    field int levelsCompleted;
+    field boolean exitGame;
+
+    // Old player and box positions used for efficient screen refreshing 
+    // Useful to redraw only changed tiles to avoid flickers on screen
+    field int oldPlayerX;
+    field int oldPlayerY;
+    field int oldBoxX;
+    field int oldBoxY;
+
+    // Next box position after a move
+    field int newBoxX;
+    field int newBoxY;
+
+    field boolean boxMoved;
+
+    /**
+     * Initializes all game objects and fields as per initial game state.
+     * Creates level, player, renderer, and UI instances.
+     */
+    constructor Game new() {
+        let level = Level.new();
+        let player = Player.new();
+
+        let renderer = Renderer.new(level, player);
+        let ui = UI.new();
+
+        let moveCount = 0;
+        let currentLevel = 1;
+        let levelsCompleted = 0;
+        let exitGame = false;
+
+        return this;
+    }
+
+    /**
+     * Runs the main game loop and handles the entire game flow.
+     * Processes and coordinates inputs, object movements, level's internal state updates, and screen rendering.
+     * At any point in game, player is allowed to enter Main Menu and start from an unlocked game level (when 
+     * a level is completed, the level object is used to update the next level to unlocked status).
+     * Program terminates when this method returns, which happens only when the 
+     * player chooses to confirm exit from the main menu, facilitating replayability.
+     * After completing all levels, player is taken to a victory screen and then back to the main menu, 
+     * where they can choose to exit, start a new game, or start from a level and beat their previous best scores.
+     */
+    method void run() {
+        var int key;
+        var boolean moved;
+
+        // Main menu loop: shows game title and waits for user to start a new game, 
+        // start from an unlocked level, read help section, or exit program
+        if (mainMenu()) {
+            do terminateScreen();  // Only upon true from mainMenu() the program terminates
+            return;
+        }
+
+        do level.loadLevel(currentLevel);  // load the first level
+
+        do player.setPosition(level.getPlayerStartX(), level.getPlayerStartY());  // set player starting position of current level
+
+        do drawLevel();  // initial render of the level and HUD
+
+        while (~exitGame) {
+
+            // Wait for user input and store it in key variable
+            let key = Input.getKey();
+            do Input.waitForKeyRelease();
+
+            // Quit (q or Q)
+            if ((key = 81) | (key = 113)) {
+                // if Y/y, main menu; if N/n, resume game
+                if (confirmQuit()) {
+                    if (mainMenu()) {
+                        let exitGame = true;  // exit game if user chooses to exit from main menu
+                    }
+                    // Else user has decided to start over or selected a level to play again
+                }
+                else {
+                    do drawLevel();  // Q/q -> N/n -> redraw level to refresh screen
+                }
+            }
+
+            // Restart (r or R)
+            if ((key = 82) | (key = 114)) {
+                do restartLevel();  // restarts current level
+            }
+
+            // Left or A or a
+            if ((key = 130) | (key = 65) | (key = 97)) {
+                let moved = tryMove(-1, 0);  // attempt to move player left by 1 tile (dx=-1, dy=0)
+
+                if (moved) {
+                    let moveCount = moveCount + 1;
+                    do refresh();  // redraw only changed tiles and update HUD to avoid flickering
+                }
+            }
+
+            // Up or W or w
+            if ((key = 131) | (key = 87) | (key = 119)) {
+                let moved = tryMove(0, -1);  // attempt to move player up by 1 tile (dx=0, dy=-1)
+
+                if (moved) {
+                    let moveCount = moveCount + 1;
+                    do refresh();  // redraw only changed tiles and update HUD to avoid flickering
+                }
+            }
+
+            // Right or D or d
+            if ((key = 132) | (key = 68) | (key = 100)) {
+                let moved = tryMove(1, 0);  // attempt to move player right by 1 tile (dx=1, dy=0)
+
+                if (moved) {
+                    let moveCount = moveCount + 1;  
+                    do refresh();  // redraw only changed tiles and update HUD to avoid flickering
+                }
+            }
+
+            // Down or S or s
+            if ((key = 133) | (key = 83) | (key = 115)) {
+                let moved = tryMove(0, 1);  // attempt to move player down by 1 tile (dx=0, dy=1)
+
+                if (moved) {
+                    let moveCount = moveCount + 1;
+                    do refresh();  // redraw only changed tiles and update HUD to avoid flickering
+                }
+            }
+
+            // Level complete
+            if (level.isCompleted()) {
+                // Update best move count for the level if current move count is better than the recorded best
+                if ((currentLevel = 1) & (moveCount < level.getBestForLevel(currentLevel))) {
+                    do level.setBestForLevel(currentLevel, moveCount);
+                }
+                if ((currentLevel = 2) & (moveCount < level.getBestForLevel(currentLevel))) {
+                    do level.setBestForLevel(currentLevel, moveCount);
+                }
+                if ((currentLevel = 3) & (moveCount < level.getBestForLevel(currentLevel))) {
+                    do level.setBestForLevel(currentLevel, moveCount);
+                }
+
+                // Update lock status of next level, which is now available to play directly from main menu
+                if (~(currentLevel + 1 > level.getNumberOfLevels())) {
+                    do level.updateLockStatusForLevel(currentLevel + 1);
+                }
+
+                do levelCompleteScreen();  // Level completion screen before proceeding to next level
+                let levelsCompleted = levelsCompleted + 1;
+                let currentLevel = currentLevel + 1;
+
+                // If there are more levels, load the next level. 
+                // Else, if all levels completed, show victory screen and return to main menu upon continuing.
+                if (~(currentLevel > level.getNumberOfLevels())) {
+                    do restartLevel();
+                }
+
+                if (levelsCompleted = level.getNumberOfLevels()) {
+                    do victoryScreen();
+                    if (mainMenu()) {
+                        let exitGame = true;  // exit game if user chooses to exit from main menu
+                    }
+                    // Else user has decided to start over or selected a level to play again
+                }
+            }
+        }
+
+        do terminateScreen();  // show termination screen before exiting program
+        return;
+    }
+
+    /**
+     * Displays the main menu and handles menu navigation.
+     * Waits for user input to start the game, select a level, read help section, or exit the program.
+     * Returns true if the user chooses and confirms to exit the game, 
+     * false if the user chooses to start over the game, or start from a particular level that's unlocked.
+     * Only upon return value true from this method, the program is terminated.
+     */
+    method boolean mainMenu() {  
+        var int key;  // stores key input
+        var boolean exitMainMenu;  // controls when to exit the main menu loop
+        var boolean exitHelp;  // controls when to exit the help screen loop
+        var boolean exitLevelSelection;  // controls when to exit the level selection loop
+        var boolean exitProgramExitConfirmation;  // controls game close confirmation screen loop
+        var boolean result;  // variable to store the result of the main menu choice (start game or exit game)
+        
+        let exitMainMenu = false;
+        let exitHelp = false;
+        let exitLevelSelection = false;
+        let exitProgramExitConfirmation = false;
+        let result = true;  // default to exit game return value
+        
+        do ui.showMainMenu();  // show main menu messages and options
+        
+        while (~exitMainMenu) {
+            let key = Input.getKey();  // read key input
+
+            // ESC key: makes the game loop return and program terminates
+            if (key = 140) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                
+                do ui.showProgramExitConfirmation();  // close program confirmation screen
+
+                while (~exitProgramExitConfirmation) {
+                    let key = Input.getKey();  // read key input
+
+                    // Y or y
+                    if ((key = 89) | (key = 121)) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                        let exitProgramExitConfirmation = true;
+                        let exitMainMenu = true;
+                        let result = true;
+                    }
+
+                    // N or n
+                    if ((key = 78) | (key = 110)) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                        let exitProgramExitConfirmation = true;
+                    }
+                }
+
+                let exitProgramExitConfirmation = false;
+                let key = 0;
+                do ui.showMainMenu();
+            }
+
+            // Enter key: start game from level 1
+            if (key = 128) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+
+                do restartGame();  // start game from level 1
+                let result = false;
+                let exitMainMenu = true;
+            }
+
+            // Help (H/h): shows objective, controls, and game elements' visual guide
+            if ((key = 72) | (key = 104)) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+
+                do ui.showHelpScreen();  // show help screen
+                
+                while (~exitHelp) {
+                    let key = Input.getKey();  // read key input while in the help screen
+
+                    // Enter or ESC key to get back to main menu from help screen
+                    if (key = 128 | key = 140) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                        
+                        let exitHelp = true;
+                    }
+                }
+
+                // reset essential variables before getting back to main menu from help screen
+                let key = 0;
+                let exitHelp = false;
+                
+                do ui.showMainMenu();  // show main menu again after exiting help screen
+            }
+
+            // Level options (L/l): shows available levels as currently locked or unlocked (finish previous levels to unlock)
+            if ((key = 108) | (key = 76)) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+
+                do ui.showLevels(level.getLockStatusArr());  // show levels
+                
+                while (~exitLevelSelection) {
+                    let key = Input.getKey();  // read key input while in the help screen
+
+                    // ESC key to get back to main menu from help screen
+                    if (key = 140) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                        let exitLevelSelection = true;
+
+                        do ui.showMainMenu();  // show main menu again after exiting level selection screen
+                    }
+
+                    // level 1 (keyboard key 1)
+                    if (key = 49) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                    
+                        if (~(level.getLockStatusForLevel(1))) { 
+                            do startFromLevel(1); // update game state to start from level 1
+                            
+                            let exitLevelSelection = true;
+                            let exitMainMenu = true;
+                            let result = false;
+                        }
+                    }
+
+                    // level 2 (keyboard key 2)
+                    if (key = 50) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                    
+                        if (~(level.getLockStatusForLevel(2))) { 
+                            do startFromLevel(2);  // update game state to start from level 2 
+                            
+                            let exitLevelSelection = true;
+                            let exitMainMenu = true;
+                            let result = false;
+                        }
+                    }
+
+                    // level 3 (keyboard key 3)
+                    if (key = 51) {
+                        do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                    
+                        if (~(level.getLockStatusForLevel(3))) { 
+                            do startFromLevel(3);  // update game state to start from level 3  
+                            
+                            let exitLevelSelection = true;
+                            let exitMainMenu = true;
+                            let result = false;
+                        }
+                    }
+                }
+
+                // reset essential variables before getting back to main menu from level selection screen
+                let key = 0;
+                let exitLevelSelection = false;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Draws the current level and HUD from a clean screen.
+     * Used when rendering a level for the first time.
+     */
+    method void drawLevel() {
+        // According to current level, get the best move count record to display in the HUD
+        var int bestCount;
+        let bestCount = level.getBestForLevel(currentLevel); 
+
+        do renderer.render();  // render the entire level from scratch
+        do ui.drawStaticHUD(bestCount, currentLevel);  // draw data that don't change every move (eg. labels, level number, etc)
+        do ui.drawDynamicHUD(moveCount);  // draw dynamic HUD values that change as you play (current move count)
+
+        return;
+    }
+
+    /**
+     * Updates only the portions of the screen that change when you move.
+     * Redraws moved objects and refreshes HUD values.
+     */
+    method void refresh() {
+        // According to current level, get the best move count record to display in the HUD
+        var int bestCount;
+        let bestCount = level.getBestForLevel(currentLevel);  
+        
+        do renderer.redrawTile(oldPlayerX, oldPlayerY);  // redraw the tile the player was previously on to erase the player's circle from there
+
+        // Update old and new box positions if it is moved
+        if (boxMoved) {
+            do renderer.redrawTile(oldBoxX, oldBoxY);
+            do renderer.redrawTile(newBoxX, newBoxY);
+        }
+
+        do renderer.drawPlayer();  // draw player at the new position after erasing from old position
+        do ui.drawDynamicHUD(moveCount);  // update HUD value move count, which changes after every move
+
+        return;
+    }
+    
+    /**
+     * Attempts to move the player in the specified direction (+dx, +dy).
+     * Handles collisions, box pushing, and movement validation.
+     * Updates game state accordingly if the move is valid.
+     * Returns true if the move was successful, false if the move is invalid 
+     * (e.g. moving into a wall or trying to push a box against another box).
+     */
+    method boolean tryMove(int dx, int dy) {
+        // Variables for player current and next positions in terms of board coordinates
+        var int playerX;
+        var int playerY;
+        var int playerNextX;
+        var int playerNextY;
+
+        var int playerNextTile;  // stores tile value of the player's next position
+
+        // Variables for box next positions in terms of board coordinates
+        var int boxNextX;
+        var int boxNextY;
+
+        // Use player object to get current player position on the board
+        let playerX = player.getX();
+        let playerY = player.getY();
+        let oldPlayerX = playerX;
+        let oldPlayerY = playerY;
+
+        let boxMoved = false;  // Assume cannot move
+
+        let playerNextX = playerX + dx;
+        let playerNextY = playerY + dy;
+
+        let playerNextTile = level.getTile(playerNextX, playerNextY);  // get what's on the destination tile 
+
+        // Wall; cannot move into a wall tile, return false
+        if (playerNextTile = 1) {
+            return false; 
+        }
+
+        // Empty floor or target; no box pushing, so just move player and return true
+        if ((playerNextTile = 0) | (playerNextTile = 3)) {
+            do player.move(dx, dy);
+            return true;
+        }
+
+        // Box or box-on-target; check if box can be pushed and update board state accordingly
+        if ((playerNextTile = 2) | (playerNextTile = 4)) {
+            let boxNextX = playerNextX + dx;
+            let boxNextY = playerNextY + dy;
+
+            if (canPushBox(playerNextX, playerNextY, boxNextX, boxNextY)) {
+                let oldBoxX = playerNextX;
+                let oldBoxY = playerNextY;
+
+                let newBoxX = boxNextX;
+                let newBoxY = boxNextY;
+
+                let boxMoved = true;
+
+                do level.moveBox(playerNextX, playerNextY, boxNextX, boxNextY);  // update level's internal board state of box movement
+
+                do player.move(dx, dy);  // update player position after moving the box
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Checks whether a box can be pushed into a destination location.
+     * Returns true only if the destination tile is available.
+     */
+    method boolean canPushBox(int boxX, int boxY, int destX, int destY) {
+        var int destTile;  // stores the destination tile value
+        let destTile = level.getTile(destX, destY);
+
+        // Empty; Can push box
+        if (destTile = 0) {
+            return true;
+        }
+
+        // Target; Can push box
+        if (destTile = 3) {
+            return true;
+        }
+
+        // Wall, box, or box-on-target; cannot push box into these tiles, return false
+        return false;
+    }
+
+    /**
+     * Reloads the current level and resets move count.
+     * Restores the initial player and box positions.
+     * Redraws the entire level from scratch. 
+     * Used when the player chooses to restart the level from R/r key.
+     */
+    method void restartLevel() {
+        let moveCount = 0;
+
+        do level.loadLevel(currentLevel);  // update the level's internal board state to reset the level
+
+        do player.setPosition(level.getPlayerStartX(), level.getPlayerStartY());  // reset player position as per the level
+
+        do drawLevel();  // render the entire level from scratch to reflect the starting state of the level
+
+        return;
+    }
+
+    /**
+     * Restarts the entire game from the first level.
+     * Resets progression and move statistics, but best move counts remain intact.
+     * Draws the entire level from scratch. 
+     * Used when the player chooses to start the game from main menu after quitting or completing all levels.
+     */
+    method void restartGame() {
+
+        // Reset internal game state variables to initial values
+        // Best move counts are not reset 
+        let moveCount = 0;
+        let levelsCompleted = 0;
+        let currentLevel = 1;
+
+        do level.loadLevel(currentLevel);  // load the first level
+
+        do player.setPosition(level.getPlayerStartX(), level.getPlayerStartY());  // set player starting position defined by first level
+
+        do drawLevel();  // initial render of the first level and HUD to reflect the reset game state
+
+        return;
+    }
+
+    /**
+     * Starts game from a selected level at main menu.
+     * If previously completed the level, the best score remains, which players may try and beat
+     * Draws the entire level from scratch. 
+     * Used when the player chooses to start the game from a particular unlocked level at main menu.
+     */
+    method void startFromLevel(int levelNum) {
+
+        // Reset internal game state variables to initial values at start of a level
+        // Best move counts are not reset 
+        let moveCount = 0;
+        let levelsCompleted = levelNum - 1;
+        let currentLevel = levelNum;
+
+        do level.loadLevel(currentLevel);  // load the selected level
+
+        do player.setPosition(level.getPlayerStartX(), level.getPlayerStartY());  // set player starting position defined by first level
+
+        do drawLevel();  // initial render of the first level and HUD to reflect the reset game state
+
+        return;
+    }
+
+    /**
+     * Displays a quit confirmation screen and waits for user input.
+     * Returns true if the user confirms to quit.
+     */
+    method boolean confirmQuit() {
+        var int key;  // stores the key pressed after the confirmation message is shown
+        var boolean exit;
+        var boolean result;
+
+        let exit = false;
+        let result = true;
+
+        do ui.showQuitConfirmation();  // show confirmation message asking user to confirm quit choice with Yes or No    
+
+        while (~exit) {
+            let key = Input.getKey();  // read key input
+
+            // Y or y
+            if ((key = 89) | (key = 121)) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                let exit = true;
+                let result = true;
+            }
+
+            // N or n
+            if ((key = 78) | (key = 110)) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+                let exit = true;
+                let result = false;
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Displays the level completion screen.
+     * Waits for the player to read message and continue.
+     */
+    method void levelCompleteScreen() {
+        var int key;  // stores key input
+        var boolean exit;
+
+        let exit = false;
+        
+        do ui.showLevelComplete(currentLevel);  // show level completion message before proceeding to the next level
+        
+        while (~exit) {
+            let key = Input.getKey();  // read key input
+
+            // enter
+            if (key = 128) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+
+                let exit = true;
+            }
+        }
+
+        return;
+    }
+
+    /**
+     * Displays the victory screen after all levels are completed.
+     * Waits for the player to continue.
+     */
+    method void victoryScreen() {
+        var int key;  // stores key input
+        var boolean exit;
+        
+        let exit = false;
+        
+        do ui.showVictoryScreen();  // show victory message after completing all levels before proceeding to main menu
+        
+        while (~exit) {
+            let key = Input.getKey();  // read key input
+
+            // enter
+            if (key = 128) {
+                do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
+
+                let exit = true;
+            }
+        }
+
+        return;
+    }
+
+    /**
+     * Displays the final program termination screen.
+     * Called before the application exits.
+     */
+    method void terminateScreen() {
+        do ui.showTerminateScreen();  // show program termination message before finally exiting the program
+
+        return;
+    }
+
+}

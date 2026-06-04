@@ -1,0 +1,193 @@
+// Project: Sokoban
+// File: Renderer.jack
+// Author: Rajkumar Saravanakumar
+
+/**
+ * Handles all rendering for the game world (the game tiles).
+ * Responsible for drawing boxes, targets, walls, and player according to the level object.
+ * Efficiently updates only affected screen regions during gameplay
+ * to avoid unnecessary redrawing and provide a smooth visual experience without flickers.
+ */
+class Renderer {
+
+    field Level level;  // reference to the level for accessing tile information during rendering
+    field Player player;  // reference to the player for accessing current position during rendering
+
+    field int maxX;  // maximum horizontal screen dimension
+    field int maxY;  // maximum vertical screen dimension
+    field int tileSize;  // length of each game tile's side in pixels
+    field int offsetX;  // horizontal offset for positioning the game board
+    field int offsetY;  // vertical offset for positioning the game board
+
+    /**
+     * Initializes renderer with tileSize, screen constraints, and level and player references.
+     * Calculates horizontal and vertical offsets for positioning the game board well.
+     */
+    constructor Renderer new(Level l, Player p) {
+        // Level and player references for accessing current game state during rendering
+        let level = l;
+        let player = p;
+
+        let tileSize = 15;  // 15x15 pixel tiles
+
+        // Hack screen dimensions
+        let maxX = 512;
+        let maxY = 256;
+
+        // Offsets to position the game board appropriately (centered with some vertical padding)
+        let offsetX = (maxX - (level.getWidth() * tileSize)) / 2;
+        let offsetY = ((maxY - (level.getHeight() * tileSize)) / 2) - 10;
+
+        return this;
+    }
+
+    /**
+     * Renders the full game board.
+     * Clears screen and draws all tiles and player according to 
+     * the state maintained by the level and player objects.
+     * Utilized when entire board needs to be drawn
+     */
+    method void render() {
+        var int x;
+        var int y;
+
+        do Screen.clearScreen();
+
+        let y = 0;
+
+        // Traverse each tile of the game board and draw it based on its type (wall, target, box, etc.)
+        while (y < level.getHeight()) {
+            let x = 0;
+
+            while (x < level.getWidth()) {
+                do drawCell(x, y, level.getTile(x, y));
+                let x = x + 1;
+            }
+
+            let y = y + 1;
+        }
+
+        do drawPlayer();
+
+        return;
+    }
+
+    /**
+     * Redraws a single tile at given coordinates.
+     * Used for optimized rendering when only one cell changes.
+     */
+    method void redrawTile(int x, int y) {
+        var int tile;
+        // Minimum horizontal and vertical offsets for the tile's object
+        var int sx; 
+        var int sy; 
+
+        let sx = offsetX + (x * tileSize);
+        let sy = offsetY + (y * tileSize);
+
+        // Clear cell first
+        do Screen.setColor(false);
+        do Screen.drawRectangle(sx, sy, sx + tileSize - 1, sy + tileSize - 1);
+
+        // Redraw whatever currently belongs there
+        let tile = level.getTile(x, y);
+
+        if (tile = 0) {
+            let tile = level.getBaseTile(x, y);
+        }
+
+        do drawCell(x, y, tile);
+
+        return;
+    }
+
+    /**
+     * Draws a single cell based on tile type.
+     * Handles walls, targets, boxes, and box-on-target states.
+     */
+    method void drawCell(int x, int y, int tile) {
+        // Minimum horizontal and vertical offsets for the tile's object
+        var int sx;
+        var int sy;
+        var int s;
+
+        let sx = offsetX + (x * tileSize);
+        let sy = offsetY + (y * tileSize);
+        let s = tileSize - 2;  // used in increasing the object offset when needed
+
+        // WALL - rendered as a grid of lines within the tile's area
+        if (tile = 1) {
+            do Screen.setColor(true);
+
+            // Vertical lines
+            do Screen.drawLine(sx, sy, sx, sy + s);
+            do Screen.drawLine(sx + 3, sy, sx + 3, sy + s);
+            do Screen.drawLine(sx + 7, sy, sx + 7, sy + s);
+            do Screen.drawLine(sx + 11, sy, sx + 11, sy + s);
+            do Screen.drawLine(sx + tileSize - 1, sy, sx + tileSize - 1, sy + s);
+
+            // Horizontal lines
+            do Screen.drawLine(sx, sy, sx + s, sy);
+            do Screen.drawLine(sx, sy + 3, sx + s, sy + 3);
+            do Screen.drawLine(sx, sy + 7, sx + s, sy + 7);
+            do Screen.drawLine(sx, sy + 11, sx + s, sy + 11);
+            do Screen.drawLine(sx, sy + tileSize - 1, sx + s, sy + tileSize - 1);
+        }
+
+        // TARGET - rendered as a hollow square centered within the tile
+        if (tile = 3) {
+            // Outer square
+            do Screen.setColor(true);
+            do Screen.drawRectangle(sx + 1, sy + 1, sx + tileSize - 2, sy + tileSize - 2);
+
+            // Inner square
+            do Screen.setColor(false);
+            do Screen.drawRectangle(sx + 2, sy + 2, sx + tileSize - 3, sy + tileSize - 3);
+        }
+
+        // BOX - rendered as a filled square centered within the tile (slightly smaller than target outline)
+        if (tile = 2) {
+            do Screen.setColor(true);
+            do Screen.drawRectangle(sx + 1, sy + 1, sx + tileSize - 2, sy + tileSize - 2);
+        }
+
+        // BOX ON TARGET - rendered as a combination of a target and a box
+        if (tile = 4) {
+            // Target outline
+            do Screen.setColor(true);
+            do Screen.drawRectangle(sx + 1, sy + 1, sx + tileSize - 2, sy + tileSize - 2);
+            do Screen.setColor(false);
+            do Screen.drawRectangle(sx + 2, sy + 2, sx + tileSize - 3, sy + tileSize - 3);
+
+            // Box fill
+            do Screen.setColor(true);
+            do Screen.drawRectangle(sx + 3, sy + 3, sx + tileSize - 4, sy + tileSize - 4);
+        }
+
+        return;
+    }
+
+    /**
+     * Draws the player on the screen.
+     * Renders player as a circle centered within its location given by player object.
+     */
+    method void drawPlayer() {
+        // Horizontal and vertical offsets for the player's circle in the tile
+        var int px;
+        var int py;
+        // Center coordinates for the player's circle
+        var int cx;
+        var int cy;
+
+        let px = offsetX + (player.getX() * tileSize);
+        let py = offsetY + (player.getY() * tileSize);
+
+        let cx = px + (tileSize / 2);
+        let cy = py + (tileSize / 2);
+
+        do Screen.setColor(true);
+        do Screen.drawCircle(cx, cy, (tileSize / 2) - 2);
+
+        return;
+    }
+}
