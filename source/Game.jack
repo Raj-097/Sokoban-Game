@@ -263,7 +263,7 @@ class Game {
                     let key = Input.getKey();  // read key input while in the help screen
 
                     // Enter or ESC key to get back to main menu from help screen
-                    if (key = 128 | key = 140) {
+                    if ((key = 128) | (key = 140)) {
                         do Input.waitForKeyRelease();  // wait for key release to avoid input issues in the next screen
                         
                         let exitHelp = true;
