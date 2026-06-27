@@ -1,5 +1,9 @@
 # Sokoban in Jack
 
+## Author
+
+Rajkumar Saravanakumar
+
 ## Overview
 
 This project is an implementation of the classic Sokoban puzzle game using the Jack programming language as part of the Nand2Tetris course.
